@@ -1,20 +1,12 @@
 import 'webextension-polyfill';
-import {
-  agentModelStore,
-  AgentNameEnum,
-  firewallStore,
-  generalSettingsStore,
-  llmProviderStore,
-} from '@extension/storage';
+import { llmProviderStore } from '@extension/storage';
 import BrowserContext from './browser/context';
 import { Executor } from './agent/executor';
 import { createLogger } from './log';
 import { ExecutionState } from './agent/event/types';
 import { createChatModel } from './agent/helper';
-import type { BaseChatModel } from '@langchain/core/language_models/chat_models';
 import { DEFAULT_AGENT_OPTIONS } from './agent/types';
 import { SpeechToTextService } from './services/speechToText';
-import { ProviderTypeEnum } from '@extension/storage';
 
 const logger = createLogger('background');
 
@@ -247,73 +239,17 @@ chrome.runtime.onConnect.addListener(port => {
 });
 
 async function setupExecutor(taskId: string, task: string, browserContext: BrowserContext) {
-  const providers = await llmProviderStore.getAllProviders();
-  // if no providers, need to display the options page
-  if (Object.keys(providers).length === 0) {
-    throw new Error('Please configure API keys in the settings first');
-  }
-  const agentModels = await agentModelStore.getAllAgentModels();
-  // verify if every provider used in the agent models exists in the providers
-  for (const agentModel of Object.values(agentModels)) {
-    if (!providers[agentModel.provider]) {
-      throw new Error(`Provider ${agentModel.provider} not found in the settings`);
-    }
-  }
-
-  const navigatorModel = agentModels[AgentNameEnum.Navigator];
-  if (!navigatorModel) {
-    throw new Error('Please choose a model for the navigator in the settings first');
-  }
-  // Log the provider config being used for the navigator
-  const navigatorProviderConfig = providers[navigatorModel.provider];
-  const navigatorLLM = createChatModel(navigatorProviderConfig, navigatorModel);
-
-  let plannerLLM: BaseChatModel | null = null;
-  const plannerModel = agentModels[AgentNameEnum.Planner];
-  if (plannerModel) {
-    // Log the provider config being used for the planner
-    const plannerProviderConfig = providers[plannerModel.provider];
-    plannerLLM = createChatModel(plannerProviderConfig, plannerModel);
-  }
-
-  let validatorLLM: BaseChatModel | null = null;
-  const validatorModel = agentModels[AgentNameEnum.Validator];
-  if (validatorModel) {
-    // Log the provider config being used for the validator
-    const validatorProviderConfig = providers[validatorModel.provider];
-    validatorLLM = createChatModel(validatorProviderConfig, validatorModel);
-  }
-
-  // Apply firewall settings to browser context
-  const firewall = await firewallStore.getFirewall();
-  if (firewall.enabled) {
-    browserContext.updateConfig({
-      allowedUrls: firewall.allowList,
-      deniedUrls: firewall.denyList,
-    });
-  } else {
-    browserContext.updateConfig({
-      allowedUrls: [],
-      deniedUrls: [],
-    });
-  }
-
-  const generalSettings = await generalSettingsStore.getSettings();
-  browserContext.updateConfig({
-    minimumWaitPageLoadTime: generalSettings.minWaitPageLoad / 1000.0,
-    displayHighlights: generalSettings.displayHighlights,
-  });
-
+  const navigatorLLM = await createChatModel();
   const executor = new Executor(task, taskId, browserContext, navigatorLLM, {
-    plannerLLM: plannerLLM ?? navigatorLLM,
-    validatorLLM: validatorLLM ?? navigatorLLM,
+    plannerLLM: navigatorLLM,
+    validatorLLM: navigatorLLM,
     agentOptions: {
-      maxSteps: generalSettings.maxSteps,
-      maxFailures: generalSettings.maxFailures,
-      maxActionsPerStep: generalSettings.maxActionsPerStep,
-      useVision: generalSettings.useVision,
+      maxSteps: 100,
+      maxFailures: 5,
+      maxActionsPerStep: 10,
+      useVision: true,
       useVisionForPlanner: true,
-      planningInterval: generalSettings.planningInterval,
+      planningInterval: 3,
     },
   });
 

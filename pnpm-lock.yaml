@@ -143,6 +143,9 @@ importers:
       '@langchain/xai':
         specifier: ^0.0.3
         version: 0.0.3(@langchain/core@0.3.61(openai@4.103.0(ws@8.18.2)(zod@3.25.58)))(ws@8.18.2)
+      groq-sdk:
+        specifier: ^0.25.0
+        version: 0.25.0
       jsonrepair:
         specifier: ^3.12.0
         version: 3.12.0
@@ -1969,6 +1972,9 @@ packages:
 
   groq-sdk@0.19.0:
     resolution: {integrity: sha512-vdh5h7ORvwvOvutA80dKF81b0gPWHxu6K/GOJBOM0n6p6CSqAVLhFfeS79Ef0j/yCycDR09jqY7jkYz9dLiS6w==}
+
+  groq-sdk@0.25.0:
+    resolution: {integrity: sha512-IZQb/U0LZQcoF6Amoq8Kh+3seDYdk7278VrAOCz/W4I2nC7PvqEwik3RjRe3bxrOBFvUFHhL/3J+jzVzfjhZUQ==}
 
   has-bigints@1.1.0:
     resolution: {integrity: sha512-R3pbpkcIqv2Pm3dUwgjclDRVmWpTJW2DcMzcIhEXEx1oh/CEMObMm3KLmRJOdvhM7o4uQBnwr8pzRK2sJWIqfg==}
@@ -5152,6 +5158,18 @@ snapshots:
   graphemer@1.4.0: {}
 
   groq-sdk@0.19.0:
+    dependencies:
+      '@types/node': 18.19.104
+      '@types/node-fetch': 2.6.12
+      abort-controller: 3.0.0
+      agentkeepalive: 4.6.0
+      form-data-encoder: 1.7.2
+      formdata-node: 4.4.1
+      node-fetch: 2.7.0
+    transitivePeerDependencies:
+      - encoding
+
+  groq-sdk@0.25.0:
     dependencies:
       '@types/node': 18.19.104
       '@types/node-fetch': 2.6.12

@@ -61,9 +61,8 @@ const SidePanel = () => {
     try {
       const configuredAgents = await agentModelStore.getConfiguredAgents();
 
-      // Check if at least one agent (preferably Navigator) is configured
-      const hasAtLeastOneModel = configuredAgents.length > 0;
-      setHasConfiguredModels(hasAtLeastOneModel);
+      // Always is groq configured
+      setHasConfiguredModels(true);
     } catch (error) {
       console.error('Error checking model configuration:', error);
       setHasConfiguredModels(false);
@@ -936,17 +935,6 @@ const SidePanel = () => {
         ) : (
           <>
             {/* Show loading state while checking model configuration */}
-            {hasConfiguredModels === null && (
-              <div
-                className={`flex flex-1 items-center justify-center p-8 ${isDarkMode ? 'text-sky-300' : 'text-sky-600'}`}>
-                <div className="text-center">
-                  <div className="mx-auto mb-4 size-8 animate-spin rounded-full border-2 border-sky-400 border-t-transparent"></div>
-                  <p>Checking configuration...</p>
-                </div>
-              </div>
-            )}
-
-            {/* Show setup message when no models are configured */}
             {hasConfiguredModels === false && (
               <div
                 className={`flex flex-1 items-center justify-center p-8 ${isDarkMode ? 'text-sky-300' : 'text-sky-600'}`}>
@@ -955,31 +943,7 @@ const SidePanel = () => {
                   <h3 className={`mb-2 text-lg font-semibold ${isDarkMode ? 'text-sky-200' : 'text-sky-700'}`}>
                     Welcome to Nanobrowser!
                   </h3>
-                  <p className="mb-4">To get started, please configure your API keys in the settings page.</p>
-                  <button
-                    onClick={() => chrome.runtime.openOptionsPage()}
-                    className={`my-4 rounded-lg px-4 py-2 font-medium transition-colors ${
-                      isDarkMode ? 'bg-sky-600 text-white hover:bg-sky-700' : 'bg-sky-500 text-white hover:bg-sky-600'
-                    }`}>
-                    Open Settings
-                  </button>
-                  <div className="mt-4 text-sm opacity-75">
-                    <a
-                      href="https://github.com/nanobrowser/nanobrowser?tab=readme-ov-file#-quick-start"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-700 hover:text-sky-600'}`}>
-                      Quick Start Guide
-                    </a>
-                    <span className="mx-2">•</span>
-                    <a
-                      href="https://discord.gg/NN3ABHggMK"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className={`${isDarkMode ? 'text-sky-400 hover:text-sky-300' : 'text-sky-700 hover:text-sky-600'}`}>
-                      Join Our Community
-                    </a>
-                  </div>
+                  <p className="mb-4">Groq AI is preconfigured. You can start chatting immediately!</p>
                 </div>
               </div>
             )}
