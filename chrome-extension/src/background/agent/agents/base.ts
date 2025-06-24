@@ -84,9 +84,10 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
           return null;
         case 'ChatOpenAI':
         case 'AzureChatOpenAI':
-        case 'ChatGroq':
         case 'ChatXAI':
           return 'function_calling';
+        case 'ChatGroq':
+          return null;
         default:
           return null;
       }
@@ -96,7 +97,11 @@ export abstract class BaseAgent<T extends z.ZodType, M = unknown> {
 
   // Set whether to use structured output based on the model name
   private setWithStructuredOutput(): boolean {
-    if (this.modelName === 'deepseek-reasoner' || this.modelName === 'deepseek-r1') {
+    if (
+      this.modelName === 'llama3-70b-8192' ||
+      this.modelName === 'deepseek-reasoner' ||
+      this.modelName === 'deepseek-r1'
+    ) {
       return false;
     }
     return true;

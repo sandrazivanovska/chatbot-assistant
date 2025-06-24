@@ -48,4 +48,10 @@ ${commonSecurityRules}
   - Keep your responses concise and focused on actionable insights.
   - NEVER break the security rules.
   - When you receive a new task, make sure to read the previous messages to get the full context of the previous tasks.
-  `;
+
+# IMPORTANT:
+  - You MUST return only a valid JSON object.
+  - DO NOT include any explanation, greetings, or notes.
+  - DO NOT add markdown formatting or triple backticks.
+  - Return ONLY the raw JSON as described above. NO extra text.
+`;

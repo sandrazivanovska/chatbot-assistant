@@ -121,7 +121,38 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
       }
       throw new Error('Could not parse response');
     }
-    throw new Error('Navigator needs to work with LLM that supports tool calling');
+    // fallback to raw completion parsing for models like Groq LLaMA3
+    logger.info('Falling back to raw JSON output parsing (no tool calling support)');
+
+    const rawResponse = await this.chatLLM.invoke(inputMessages, {
+      signal: this.context.controller.signal,
+      ...this.callOptions,
+    });
+
+    const rawContent = (rawResponse as BaseMessage).content;
+
+    // Normalize to string
+    let text = '';
+    if (typeof rawContent === 'string') {
+      text = rawContent;
+    } else if (Array.isArray(rawContent)) {
+      text = rawContent.map((part: any) => part?.text || '').join('');
+    } else {
+      throw new Error('Unsupported message content format');
+    }
+
+    if (!text.trim()) throw new Error('Empty model output');
+
+    try {
+      const fixed = repairJsonString(text);
+      const parsed = JSON.parse(fixed);
+
+      const validated = this.modelOutputSchema.parse(parsed);
+      return validated;
+    } catch (error) {
+      logger.error('Failed to parse fallback JSON output', error);
+      throw new Error('Could not parse fallback JSON output');
+    }
   }
 
   async execute(): Promise<AgentOutput<NavigatorResult>> {
