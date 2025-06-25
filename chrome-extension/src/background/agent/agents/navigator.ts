@@ -5,7 +5,7 @@ import { ActionResult, type AgentOutput } from '../types';
 import type { Action } from '../actions/builder';
 import { buildDynamicActionSchema } from '../actions/builder';
 import { agentBrainSchema } from '../types';
-import { type BaseMessage, HumanMessage } from '@langchain/core/messages';
+import { type BaseMessage, HumanMessage, AIMessage, SystemMessage } from '@langchain/core/messages';
 import { Actors, ExecutionState } from '../event/types';
 import {
   ChatModelAuthError,
@@ -176,9 +176,35 @@ export class NavigatorAgent extends BaseAgent<z.ZodType, NavigatorResult> {
 
       // call the model to get the actions to take
       const inputMessages = messageManager.getMessages();
-      // logger.info('Navigator input message', inputMessages[inputMessages.length - 1]);
 
-      const modelOutput = await this.invoke(inputMessages);
+      // Convert to plain {role, content} format
+      const llamaMessages = inputMessages.map(m => ({
+        role: m.getType(),
+        content: Array.isArray(m.content)
+          ? m.content
+              .map(item => {
+                if (typeof item === 'string') return item;
+                if ('text' in item && typeof item.text === 'string') return item.text;
+                if ('image_url' in item && typeof item.image_url === 'string')
+                  return typeof item.image_url === 'string' ? item.image_url : item.image_url;
+                return JSON.stringify(item);
+              })
+              .join('\n')
+          : typeof m.content === 'string'
+            ? m.content
+            : JSON.stringify(m.content),
+      }));
+
+      // Convert plain llama messages back into BaseMessage objects
+      const baseMessages = llamaMessages.map(m => {
+        if (m.role === 'human') return new HumanMessage(m.content);
+        if (m.role === 'ai') return new AIMessage(m.content);
+        return new SystemMessage(m.content); // system or fallback
+      });
+
+      // Now you can safely invoke
+      logger.info('Navigator input message', llamaMessages[inputMessages.length - 1]);
+      const modelOutput = await this.invoke(baseMessages);
 
       // check if the task is paused or stopped
       if (this.context.paused || this.context.stopped) {

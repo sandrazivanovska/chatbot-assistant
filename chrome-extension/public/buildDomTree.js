@@ -1260,204 +1260,73 @@ window.buildDomTree = (
   /**
    * Creates a node data object for a given node and its descendants.
    */
-  function buildDomTree(node, parentIframe = null, isParentHighlighted = false) {
-    // Fast rejection checks first
-    if (
-      !node ||
-      node.id === HIGHLIGHT_CONTAINER_ID ||
-      (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.TEXT_NODE)
-    ) {
-      if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-      return null;
+  function buildDomTree(args) {
+    const skipTags = new Set(['SCRIPT', 'STYLE', 'META', 'BASE', 'TITLE', 'NOSCRIPT', 'TEMPLATE', 'SLOT']);
+
+    function isVisible(el) {
+      const style = window.getComputedStyle(el);
+      const rect = el.getBoundingClientRect();
+      return (
+        style.display !== 'none' &&
+        style.visibility !== 'hidden' &&
+        style.opacity !== '0' &&
+        el.offsetParent !== null &&
+        rect.width > 0 &&
+        rect.height > 0
+      );
     }
 
-    if (debugMode) PERF_METRICS.nodeMetrics.totalNodes++;
-
-    if (!node || node.id === HIGHLIGHT_CONTAINER_ID) {
-      if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-      return null;
+    function shouldInclude(el) {
+      if (!(el instanceof Element)) return false;
+      if (skipTags.has(el.tagName)) return false;
+      if (!isVisible(el)) return false;
+      return true;
     }
 
-    // Special handling for root node (body)
-    if (node === document.body) {
-      const nodeData = {
-        tagName: 'body',
-        attributes: {},
-        xpath: '/body',
-        children: [],
+    function walkDOM(node, highlightIndex = null) {
+      if (!shouldInclude(node)) return null;
+
+      const xpath = generateXPath(node); // your util
+      const children = [];
+      for (const child of node.children) {
+        const parsed = walkDOM(child);
+        if (parsed) children.push(parsed);
+      }
+
+      return {
+        tagName: node.tagName,
+        xpath,
+        attributes: Object.fromEntries([...node.attributes].map(a => [a.name, a.value])),
+        isVisible: true,
+        isInteractive: node.tabIndex >= 0 || typeof node.onclick === 'function',
+        isTopElement: false,
+        isInViewport: true, // optional: adjust with scroll
+        highlightIndex,
+        children,
       };
-
-      // Process children of body
-      for (const child of node.childNodes) {
-        const domElement = buildDomTree(child, parentIframe, false); // Body's children have no highlighted parent initially
-        if (domElement) nodeData.children.push(domElement);
-      }
-
-      const id = `${ID.current++}`;
-      DOM_HASH_MAP[id] = nodeData;
-      if (debugMode) PERF_METRICS.nodeMetrics.processedNodes++;
-      return id;
     }
 
-    // Early bailout for non-element nodes except text
-    if (node.nodeType !== Node.ELEMENT_NODE && node.nodeType !== Node.TEXT_NODE) {
-      if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-      return null;
-    }
+    const root = walkDOM(document.body);
+    const map = {};
+    let id = 0;
 
-    // Process text nodes
-    if (node.nodeType === Node.TEXT_NODE) {
-      const textContent = node.textContent.trim();
-      if (!textContent) {
-        if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-        return null;
-      }
-
-      // Only check visibility for text nodes that might be visible
-      const parentElement = node.parentElement;
-      if (!parentElement || parentElement.tagName.toLowerCase() === 'script') {
-        if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-        return null;
-      }
-
-      const id = `${ID.current++}`;
-      DOM_HASH_MAP[id] = {
-        type: 'TEXT_NODE',
-        text: textContent,
-        isVisible: isTextNodeVisible(node),
-      };
-      if (debugMode) PERF_METRICS.nodeMetrics.processedNodes++;
-      return id;
-    }
-
-    // Quick checks for element nodes
-    if (node.nodeType === Node.ELEMENT_NODE && !isElementAccepted(node)) {
-      if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-      return null;
-    }
-
-    // Early viewport check - only filter out elements clearly outside viewport
-    if (viewportExpansion !== -1) {
-      const rect = getCachedBoundingRect(node); // Keep for initial quick check
-      const style = getCachedComputedStyle(node);
-
-      // Skip viewport check for fixed/sticky elements as they may appear anywhere
-      const isFixedOrSticky = style && (style.position === 'fixed' || style.position === 'sticky');
-
-      // Check if element has actual dimensions using offsetWidth/Height (quick check)
-      const hasSize = node.offsetWidth > 0 || node.offsetHeight > 0;
-
-      // Use getBoundingClientRect for the quick OUTSIDE check.
-      // isInExpandedViewport will do the more accurate check later if needed.
-      if (
-        !rect ||
-        (!isFixedOrSticky &&
-          !hasSize &&
-          (rect.bottom < -viewportExpansion ||
-            rect.top > window.innerHeight + viewportExpansion ||
-            rect.right < -viewportExpansion ||
-            rect.left > window.innerWidth + viewportExpansion))
-      ) {
-        // console.log("Skipping node outside viewport (quick check):", node.tagName, rect);
-        if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-        return null;
+    function flatten(node) {
+      const myId = id++;
+      map[myId] = node;
+      for (const child of node.children) {
+        flatten(child);
       }
     }
 
-    // Process element node
-    const nodeData = {
-      tagName: node.tagName.toLowerCase(),
-      attributes: {},
-      xpath: getXPathTree(node, true),
-      children: [],
+    if (root) {
+      flatten(root);
+    }
+
+    return {
+      map,
+      rootId: '0',
+      perfMetrics: {},
     };
-
-    // Get attributes for interactive elements or potential text containers
-    if (
-      isInteractiveCandidate(node) ||
-      node.tagName.toLowerCase() === 'iframe' ||
-      node.tagName.toLowerCase() === 'body'
-    ) {
-      const attributeNames = node.getAttributeNames?.() || [];
-      for (const name of attributeNames) {
-        nodeData.attributes[name] = node.getAttribute(name);
-      }
-    }
-
-    let nodeWasHighlighted = false;
-    // Perform visibility, interactivity, and highlighting checks
-    if (node.nodeType === Node.ELEMENT_NODE) {
-      nodeData.isVisible = isElementVisible(node); // isElementVisible uses offsetWidth/Height, which is fine
-      if (nodeData.isVisible) {
-        nodeData.isTopElement = isTopElement(node);
-        if (nodeData.isTopElement) {
-          nodeData.isInteractive = isInteractiveElement(node);
-          // Call the dedicated highlighting function
-          nodeWasHighlighted = handleHighlighting(nodeData, node, parentIframe, isParentHighlighted);
-        }
-      }
-    }
-
-    // Process children, with special handling for iframes and rich text editors
-    if (node.tagName) {
-      const tagName = node.tagName.toLowerCase();
-
-      // Handle iframes
-      if (tagName === 'iframe') {
-        try {
-          const iframeDoc = node.contentDocument || node.contentWindow?.document;
-          if (iframeDoc) {
-            for (const child of iframeDoc.childNodes) {
-              const domElement = buildDomTree(child, node, false);
-              if (domElement) nodeData.children.push(domElement);
-            }
-          }
-        } catch (e) {
-          console.warn('Unable to access iframe:', e);
-        }
-      }
-      // Handle rich text editors and contenteditable elements
-      else if (
-        node.isContentEditable ||
-        node.getAttribute('contenteditable') === 'true' ||
-        node.id === 'tinymce' ||
-        node.classList.contains('mce-content-body') ||
-        (tagName === 'body' && node.getAttribute('data-id')?.startsWith('mce_'))
-      ) {
-        // Process all child nodes to capture formatted text
-        for (const child of node.childNodes) {
-          const domElement = buildDomTree(child, parentIframe, nodeWasHighlighted);
-          if (domElement) nodeData.children.push(domElement);
-        }
-      } else {
-        // Handle shadow DOM
-        if (node.shadowRoot) {
-          nodeData.shadowRoot = true;
-          for (const child of node.shadowRoot.childNodes) {
-            const domElement = buildDomTree(child, parentIframe, nodeWasHighlighted);
-            if (domElement) nodeData.children.push(domElement);
-          }
-        }
-        // Handle regular elements
-        for (const child of node.childNodes) {
-          // Pass the highlighted status of the *current* node to its children
-          const passHighlightStatusToChild = nodeWasHighlighted || isParentHighlighted;
-          const domElement = buildDomTree(child, parentIframe, passHighlightStatusToChild);
-          if (domElement) nodeData.children.push(domElement);
-        }
-      }
-    }
-
-    // Skip empty anchor tags
-    if (nodeData.tagName === 'a' && nodeData.children.length === 0 && !nodeData.attributes.href) {
-      if (debugMode) PERF_METRICS.nodeMetrics.skippedNodes++;
-      return null;
-    }
-
-    const id = `${ID.current++}`;
-    DOM_HASH_MAP[id] = nodeData;
-    if (debugMode) PERF_METRICS.nodeMetrics.processedNodes++;
-    return id;
   }
 
   // After all functions are defined, wrap them with performance measurement
